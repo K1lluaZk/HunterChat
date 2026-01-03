@@ -1,0 +1,26 @@
+{
+  "name": "hunterchat",
+  "version": "1.0.0",
+  "description": "HunterChat es un proyecto básico de chat en tiempo real, desarrollado con fines educativos, enfocado en comprender los fundamentos de la comunicación en red y la interacción entre usuarios.",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --watch ./server/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/K1lluaZk/HunterChat.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/K1lluaZk/HunterChat/issues"
+  },
+  "homepage": "https://github.com/K1lluaZk/HunterChat#readme",
+  "dependencies": {
+    "express": "5.2.1",
+    "morgan": "1.10.1"
+  }
+}
