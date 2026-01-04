@@ -10,8 +10,7 @@
 
         const socket = io({
             auth: {
-                token: "123",
-                username: "Guest",
+
                 serverOffset: 0
             }
         })
@@ -19,6 +18,11 @@
         const form = document.getElementById('form')
         const input = document.getElementById('input')
         const messages = document.getElementById('messages')
+
+        const getUsername = async () => {
+            const username = localStorage.getItem('username')
+            if (username) {
+              console.log('User existed ${username}')
 
         socket.on('chat message', (msg, serverOffset) => {
             const item = `<li>${msg}</li>`

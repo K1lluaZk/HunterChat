@@ -28,7 +28,7 @@ const db = createClient({
 await db.execute(`
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    content TEXT NOT NULL
+    content TEXT NOT NULL,
 )`)
 
 
@@ -53,17 +53,19 @@ io.on('connection', async (socket) => {
           return        
         }   
 
-console.log("auth")
- console.log(socket.handshake.auth)
 
         io.emit('chat message', msg, result.lastInsertRowid.toString())
         })
 
         if (!socket.recovered) {
             try {
-                const res = await db.execute({ 
-                    sql: 'SELECT id,, content FROM messages where id > ?',
-                    args: [0]
+                const results = await db.execute({ 
+                    sql: 'SELECT id, content FROM messages where id > ?',
+                    args: [socket.handshake.auth.serverOffset ?? 0]
+                })
+                
+                results.rows.forEach(row  => {
+                    socket.emit('chat message', row.content, row.id.toString())
                 })
              } catch (e) {
                 console.error(e)
