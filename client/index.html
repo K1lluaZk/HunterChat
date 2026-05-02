@@ -1,139 +1,110 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HunterChat</title>
-
-    <script type="module">
-        import { io } from "https://cdn.socket.io/4.8.3/socket.io.esm.min.js";
-
-        const socket = io({
-            auth: {
-
-                serverOffset: 0
-            }
-        })
-
-        const form = document.getElementById('form')
-        const input = document.getElementById('input')
-        const messages = document.getElementById('messages')
-
-        const getUsername = async () => {
-            const username = localStorage.getItem('username')
-            if (username) {
-              console.log('User existed ${username}')
-
-        socket.on('chat message', (msg, serverOffset) => {
-            const item = `<li>${msg}</li>`
-            messages.insertAdjacentHTML('beforeend', item)
-            socket.auth.serverOffset = serverOffset
-        })
-
-        form.addEventListener('submit', (e) => {
-            e.preventDefault()
-
-            if (input.value) {
-                socket.emit('chat message', input.value)
-                input.value = ''
-            }
-        })
-    </script>
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HunterChat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-    }
-
-    :root {
-      color-scheme: light dark;
-    }
-
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-      display: grid;
-      place-content: center;
-      height: 100vh;
-      padding: 36px 36px 100px 36px;
-      grid-template-rows: 1fr;
-    }
-
-     #messages {
-      list-style-type: none;
-      margin: 0;
-      padding: 0;
-      overflow-y: scroll;
-      height: 100%;
-      scroll-behavior: smooth;
-      padding-bottom: 48px;
-    }
-
-    #messages>li {
-      padding: .5rem 1rem;
-    }
-
-    #messages>li:nth-child(odd) {
-      background: #000;
-    }
-
-
-    #chat {
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      overflow: hidden;
-      width: 350px;
-      height: 100%;
-      position: relative;
-    }
-
-    #form {
-      bottom: 0;
-      display: flex;
-      height: 48px;
-      left: 0;
-      padding: 4px;
-      position: absolute;
-      right: 0;
-    }
-
-    #input {
-      border-radius: 9999px;
-      border: 1px solid #6135ff;
-      flex: 1;
-      margin: 4px;
-      padding: 0 8px;
-    }
-
-    #input:focus {
-      outline: 0;
-    }
-
-    #form>button {
-      background: rgb(12, 74, 116);
-      color: #fff;
-      border: 0;
-      margin: 4px;
-      border-radius: 4px;
-    }
-
-    #form>button:hover {
-      background: #0cf;
-    }
+    #messages::-webkit-scrollbar { width: 4px; }
+    #messages::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
   </style>
 </head>
+<body class="bg-[#0f172a] h-screen flex items-center justify-center p-4">
 
-<body>
-  <section id="chat">
-    <ul id="messages"></ul>
-    <form id="form">
-      <input type="text" name="message" id="input" placeholder="Type a message" autocomplete="off" />
-      <button type="submit">Enviar</button>
+  <section id="chat" class="w-full max-w-md h-[85vh] bg-[#1e293b] rounded-2xl shadow-2xl border border-slate-700 flex flex-col overflow-hidden">
+    
+    <header class="bg-[#1e293b] p-4 border-b border-slate-700 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+        <h1 class="text-white font-bold tracking-tight">HunterChat</h1>
+      </div>
+      <span class="text-slate-400 text-xs font-mono">v2.0</span>
+    </header>
+
+    <ul id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 scroll-smooth">
+    </ul>
+
+    <form id="form" class="p-4 bg-[#1e293b] border-t border-slate-700 flex gap-2">
+      <input 
+        type="text" 
+        id="input" 
+        placeholder="Escribe un mensaje..." 
+        autocomplete="off"
+        class="flex-1 bg-[#0f172a] text-white border border-slate-600 rounded-xl px-4 py-2 focus:outline-none focus:border-indigo-500 transition-colors"
+      />
+      <button 
+        type="submit" 
+        class="bg-indigo-600 hover:bg-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+        </svg>
+      </button>
     </form>
   </section>
 
-</body>
+  <script type="module">
+    import { io } from "https://cdn.socket.io/4.8.3/socket.io.esm.min.js";
 
+    document.addEventListener('DOMContentLoaded', () => {
+      const messagesList = document.getElementById('messages');
+      const form = document.getElementById('form');
+      const input = document.getElementById('input');
+
+      let username = localStorage.getItem('username') || prompt('Tu nombre de usuario:') || 'Anónimo';
+      localStorage.setItem('username', username);
+
+      const socket = io();
+
+      socket.on('connect', () => {
+        socket.emit('get history');
+      });
+
+      socket.on('load history', (history) => {
+        messagesList.innerHTML = ''; 
+        history.forEach(msg => renderMessage(msg.content, msg.user));
+        scrollToBottom();
+      });
+
+      socket.on('chat message', (msg, id, user) => {
+        renderMessage(msg, user);
+        scrollToBottom();
+      });
+
+      function renderMessage(content, user) {
+        const isMyMessage = user === username;
+        
+        const containerClass = isMyMessage ? 'self-end' : 'self-start';
+        const bubbleClass = isMyMessage 
+          ? 'bg-indigo-600 text-white rounded-tr-none' 
+          : 'bg-slate-700 text-slate-100 rounded-tl-none';
+
+        const item = `
+          <li class="${containerClass} max-w-[85%]">
+            <small class="block text-[10px] mb-1 font-semibold text-slate-400 px-1 ${isMyMessage ? 'text-right' : 'text-left'}">
+              ${isMyMessage ? 'Tú' : user}
+            </small>
+            <div class="${bubbleClass} px-3 py-2 rounded-2xl text-sm shadow-sm">
+              ${content}
+            </div>
+          </li>`;
+          
+        messagesList.insertAdjacentHTML('beforeend', item);
+      }
+
+      function scrollToBottom() {
+        messagesList.scrollTop = messagesList.scrollHeight;
+      }
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (input.value.trim()) {
+          socket.emit('chat message', input.value, username);
+          input.value = '';
+        }
+      });
+    });
+  </script>
+</body>
 </html>
