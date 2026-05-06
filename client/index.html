@@ -7,7 +7,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     #messages::-webkit-scrollbar { width: 4px; }
-    #messages::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
+    #messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
   </style>
 </head>
 <body class="bg-[#0f172a] h-screen flex items-center justify-center p-4">
@@ -16,29 +16,26 @@
     
     <header class="bg-[#1e293b] p-4 border-b border-slate-700 flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <div class="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+        <div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></div>
         <h1 class="text-white font-bold tracking-tight">HunterChat</h1>
+      <div class="flex">
+        <span class="ml-auto text-slate-400 text-xs font-mono">v2.1</span>
       </div>
-      <span class="text-slate-400 text-xs font-mono">v2.0</span>
+      </div>
+      <span id="user-tag" class="text-indigo-400 text-[10px] font-mono uppercase bg-indigo-500/10 px-2 py-1 rounded"></span>
     </header>
 
-    <ul id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-3 scroll-smooth">
-    </ul>
+    <ul id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
+      </ul>
 
     <form id="form" class="p-4 bg-[#1e293b] border-t border-slate-700 flex gap-2">
       <input 
-        type="text" 
-        id="input" 
-        placeholder="Escribe un mensaje..." 
-        autocomplete="off"
-        class="flex-1 bg-[#0f172a] text-white border border-slate-600 rounded-xl px-4 py-2 focus:outline-none focus:border-indigo-500 transition-colors"
+        type="text" id="input" placeholder="Escribe un mensaje..." autocomplete="off"
+        class="flex-1 bg-[#0f172a] text-white border border-slate-600 rounded-xl px-4 py-2 focus:outline-none focus:border-indigo-500 transition-all text-sm"
       />
-      <button 
-        type="submit" 
-        class="bg-indigo-600 hover:bg-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-transform active:scale-90">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
+          <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
         </svg>
       </button>
     </form>
@@ -51,51 +48,79 @@
       const messagesList = document.getElementById('messages');
       const form = document.getElementById('form');
       const input = document.getElementById('input');
+      const userTag = document.getElementById('user-tag');
 
-      let username = localStorage.getItem('username') || prompt('Tu nombre de usuario:') || 'Anónimo';
+      let lastDateLabel = null; // Para rastrear el cambio de día
+      let username = localStorage.getItem('username') || prompt('Tu nombre:') || 'Anónimo';
       localStorage.setItem('username', username);
+      userTag.innerText = username;
 
       const socket = io();
 
-      socket.on('connect', () => {
-        socket.emit('get history');
-      });
+      socket.on('connect', () => socket.emit('get history'));
 
       socket.on('load history', (history) => {
         messagesList.innerHTML = ''; 
-        history.forEach(msg => renderMessage(msg.content, msg.user));
+        lastDateLabel = null; // Reiniciar al cargar historial
+        history.forEach(m => renderMessage(m.content, m.user, m.timestamp));
         scrollToBottom();
       });
 
-      socket.on('chat message', (msg, id, user) => {
-        renderMessage(msg, user);
+      socket.on('chat message', (msg, id, user, timestamp) => {
+        renderMessage(msg, user, timestamp);
         scrollToBottom();
       });
 
-      function renderMessage(content, user) {
+      function renderMessage(content, user, timestamp) {
         const isMyMessage = user === username;
+        const msgDate = timestamp ? new Date(timestamp) : new Date();
         
-        const containerClass = isMyMessage ? 'self-end' : 'self-start';
-        const bubbleClass = isMyMessage 
-          ? 'bg-indigo-600 text-white rounded-tr-none' 
-          : 'bg-slate-700 text-slate-100 rounded-tl-none';
+        // 1. Lógica del separador de fecha
+        const dateLabel = getDateLabel(msgDate);
+        if (dateLabel !== lastDateLabel) {
+          renderDateSeparator(dateLabel);
+          lastDateLabel = dateLabel;
+        }
+
+        const time = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         const item = `
-          <li class="${containerClass} max-w-[85%]">
-            <small class="block text-[10px] mb-1 font-semibold text-slate-400 px-1 ${isMyMessage ? 'text-right' : 'text-left'}">
-              ${isMyMessage ? 'Tú' : user}
-            </small>
-            <div class="${bubbleClass} px-3 py-2 rounded-2xl text-sm shadow-sm">
+          <li class="flex flex-col mb-3 ${isMyMessage ? 'items-end' : 'items-start'}">
+            <div class="flex items-center gap-2 mb-0.5 px-1 ${isMyMessage ? 'flex-row-reverse' : ''}">
+              <span class="text-[10px] font-bold text-slate-500">${isMyMessage ? 'Tú' : user}</span>
+              <span class="text-[9px] text-slate-600">${time}</span>
+            </div>
+            <div class="max-w-[90%] px-3 py-2 rounded-2xl text-sm shadow-md ${
+              isMyMessage ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-700 text-slate-100 rounded-tl-none'
+            }">
               ${content}
             </div>
           </li>`;
-          
         messagesList.insertAdjacentHTML('beforeend', item);
       }
 
-      function scrollToBottom() {
-        messagesList.scrollTop = messagesList.scrollHeight;
+      function renderDateSeparator(label) {
+        const separator = `
+          <div class="flex items-center my-4">
+            <div class="flex-grow border-t border-slate-700/50"></div>
+            <span class="mx-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">${label}</span>
+            <div class="flex-grow border-t border-slate-700/50"></div>
+          </div>`;
+        messagesList.insertAdjacentHTML('beforeend', separator);
       }
+
+      function getDateLabel(date) {
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+
+        if (date.toDateString() === today.toDateString()) return 'Hoy';
+        if (date.toDateString() === yesterday.toDateString()) return 'Ayer';
+        
+        return date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+      }
+
+      const scrollToBottom = () => messagesList.scrollTop = messagesList.scrollHeight;
 
       form.addEventListener('submit', (e) => {
         e.preventDefault();

@@ -12,77 +12,69 @@ const app = express()
 const server = createServer(app)
 
 const io = new Server(server, {
-    connectionStateRecovery: {
-        maxDisconnectionDuration: 2 * 60 * 1000,
-    }
+  connectionStateRecovery: {
+    maxDisconnectionDuration: 2 * 60 * 1000,
+  }
 })
 
 const db = createClient({
-    url: process.env.DB_URL || "libsql://deep-atom-k1lluazk.aws-us-east-1.turso.io",
-    authToken: process.env.DB_TOKEN
+  url: process.env.DB_URL,
+  authToken: process.env.DB_TOKEN
 })
 
-// Inicialización de la DB
+// Inicialización de la tabla con timestamp
 await db.execute(`
-    CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        content TEXT NOT NULL,
-        user TEXT DEFAULT 'Anónimo',
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
+  CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    content TEXT NOT NULL,
+    user TEXT DEFAULT 'Anónimo',
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  )
 `)
 
 app.use(logger('dev'))
 app.use(express.static('client'))
 
 io.on('connection', async (socket) => {
-    console.log('Usuario conectado')
+  console.log('✅ Usuario conectado')
 
-    const serverOffset = socket.handshake.auth.serverOffset ?? 0
-    
+  // Enviar historial al cliente cuando lo pida
+  socket.on('get history', async () => {
     try {
-        let results;
-        if (serverOffset > 0) {
-            results = await db.execute({ 
-                sql: 'SELECT id, content, user FROM messages WHERE id > ?',
-                args: [serverOffset]
-            })
-        } else {
-            results = await db.execute('SELECT id, content, user FROM messages ORDER BY id DESC LIMIT 30')
-            results.rows.reverse() 
-        }
-        
-        results.rows.forEach(row => {
-            socket.emit('chat message', row.content, row.id.toString(), row.user)
-        })
+      const results = await db.execute('SELECT id, content, user, timestamp FROM messages ORDER BY id DESC LIMIT 50')
+      socket.emit('load history', results.rows.reverse())
     } catch (e) {
-        console.error("Error cargando historial:", e)
+      console.error("Error al cargar historial:", e)
     }
+  })
 
-    socket.on('chat message', async (msg, username = 'Anónimo') => {
-        if (!msg || !msg.trim()) return 
+  // Recibir y guardar mensaje
+  socket.on('chat message', async (msg, username = 'Anónimo') => {
+    if (!msg?.trim()) return 
 
-        try {
-            const result = await db.execute({
-                sql: 'INSERT INTO messages (content, user) VALUES (:msg, :user)',
-                args: { msg, user: username }
-            })
-            
-            io.emit('chat message', msg, result.lastInsertRowid.toString(), username)
-        } catch (e) {
-            console.error("Error al guardar mensaje:", e)
-        }
-    })
+    try {
+      const result = await db.execute({
+        sql: 'INSERT INTO messages (content, user) VALUES (:msg, :user)',
+        args: { msg, user: username }
+      })
+      
+      // Recuperamos el timestamp que SQLite generó automáticamente
+      const newMessage = await db.execute({
+        sql: 'SELECT timestamp FROM messages WHERE id = ?',
+        args: [result.lastInsertRowid.toString()]
+      })
 
-    socket.on('disconnect', () => {
-        console.log('Usuario desconectado')
-    })
-}) 
+      io.emit('chat message', msg, result.lastInsertRowid.toString(), username, newMessage.rows[0].timestamp)
+    } catch (e) {
+      console.error("Error al guardar mensaje:", e)
+    }
+  })
+})
 
 app.get('/', (req, res) => {
-    res.sendFile(process.cwd() + '/client/index.html')
+  res.sendFile(process.cwd() + '/client/index.html')
 })
 
 server.listen(port, () => {
-    console.log(`HunterChat is running in http://localhost:${port}`)
+  console.log(`server running in port ${port}`)
 })
