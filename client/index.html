@@ -18,14 +18,12 @@
       <div class="flex items-center gap-2">
         <div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></div>
         <h1 class="text-white font-bold tracking-tight">HunterChat</h1>
-      <div class="flex">
         <span class="ml-auto text-slate-400 text-xs font-mono">v2.1</span>
-      </div>
       </div>
       <span id="user-tag" class="text-indigo-400 text-[10px] font-mono uppercase bg-indigo-500/10 px-2 py-1 rounded"></span>
     </header>
 
-    <ul id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-1">
+    <ul id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col">
       </ul>
 
     <form id="form" class="p-4 bg-[#1e293b] border-t border-slate-700 flex gap-2">
@@ -50,7 +48,7 @@
       const input = document.getElementById('input');
       const userTag = document.getElementById('user-tag');
 
-      let lastDateLabel = null; // Para rastrear el cambio de día
+      let lastDateLabel = null;
       let username = localStorage.getItem('username') || prompt('Tu nombre:') || 'Anónimo';
       localStorage.setItem('username', username);
       userTag.innerText = username;
@@ -61,7 +59,7 @@
 
       socket.on('load history', (history) => {
         messagesList.innerHTML = ''; 
-        lastDateLabel = null; // Reiniciar al cargar historial
+        lastDateLabel = null;
         history.forEach(m => renderMessage(m.content, m.user, m.timestamp));
         scrollToBottom();
       });
@@ -73,20 +71,24 @@
 
       function renderMessage(content, user, timestamp) {
         const isMyMessage = user === username;
+        // Al recibir el ISO string con 'Z', new Date() lo convierte a tu hora local automáticamente
         const msgDate = timestamp ? new Date(timestamp) : new Date();
         
-        // 1. Lógica del separador de fecha
         const dateLabel = getDateLabel(msgDate);
         if (dateLabel !== lastDateLabel) {
           renderDateSeparator(dateLabel);
           lastDateLabel = dateLabel;
         }
 
-        const time = msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const time = msgDate.toLocaleTimeString(navigator.language, { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true 
+        });
 
         const item = `
-          <li class="flex flex-col mb-3 ${isMyMessage ? 'items-end' : 'items-start'}">
-            <div class="flex items-center gap-2 mb-0.5 px-1 ${isMyMessage ? 'flex-row-reverse' : ''}">
+          <li class="flex flex-col mb-4 ${isMyMessage ? 'items-end' : 'items-start'}">
+            <div class="flex items-center gap-2 mb-1 px-1 ${isMyMessage ? 'flex-row-reverse' : ''}">
               <span class="text-[10px] font-bold text-slate-500">${isMyMessage ? 'Tú' : user}</span>
               <span class="text-[9px] text-slate-600">${time}</span>
             </div>
@@ -101,7 +103,7 @@
 
       function renderDateSeparator(label) {
         const separator = `
-          <div class="flex items-center my-4">
+          <div class="flex items-center my-6">
             <div class="flex-grow border-t border-slate-700/50"></div>
             <span class="mx-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">${label}</span>
             <div class="flex-grow border-t border-slate-700/50"></div>

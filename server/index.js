@@ -22,7 +22,7 @@ const db = createClient({
   authToken: process.env.DB_TOKEN
 })
 
-// Inicialización de la tabla con timestamp
+// Inicialización de la tabla
 await db.execute(`
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,19 +36,22 @@ app.use(logger('dev'))
 app.use(express.static('client'))
 
 io.on('connection', async (socket) => {
-  console.log('✅ Usuario conectado')
+  console.log(' Usuario conectado')
 
-  // Enviar historial al cliente cuando lo pida
   socket.on('get history', async () => {
     try {
-      const results = await db.execute('SELECT id, content, user, timestamp FROM messages ORDER BY id DESC LIMIT 50')
+      // Forzamos el formato ISO con la 'Z' para que el cliente lo entienda como UTC
+      const results = await db.execute(`
+        SELECT id, content, user, strftime('%Y-%m-%dT%H:%M:%SZ', timestamp) as timestamp 
+        FROM messages 
+        ORDER BY id DESC LIMIT 50
+      `)
       socket.emit('load history', results.rows.reverse())
     } catch (e) {
       console.error("Error al cargar historial:", e)
     }
   })
 
-  // Recibir y guardar mensaje
   socket.on('chat message', async (msg, username = 'Anónimo') => {
     if (!msg?.trim()) return 
 
@@ -58,9 +61,8 @@ io.on('connection', async (socket) => {
         args: { msg, user: username }
       })
       
-      // Recuperamos el timestamp que SQLite generó automáticamente
       const newMessage = await db.execute({
-        sql: 'SELECT timestamp FROM messages WHERE id = ?',
+        sql: "SELECT strftime('%Y-%m-%dT%H:%M:%SZ', timestamp) as timestamp FROM messages WHERE id = ?",
         args: [result.lastInsertRowid.toString()]
       })
 
