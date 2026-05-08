@@ -26,49 +26,56 @@
 * **Real-time Engine:** Socket.io for WebSocket management.
 * **Database:** Turso (LibSQL) for efficient, distributed data storage.
 
-### 🚀 How to Run Locally
+### 🚀 How to Run
 
-1. **Clone the repository:**
+You can run **HunterChat** locally using Node.js or containerized with Docker.
 
-```bash
-git clone https://github.com/K1lluaZk/HunterChat.git
+#### Option 1: Using Docker (Recommended)
+1. **Build and start the container:**
+   ```bash
+   docker compose up -d --build
 
 ```
 
-2. **Install dependencies:**
+2. **Access the app:** Open [http://localhost:3000](https://www.google.com/search?q=http://localhost:3000)
 
+#### Option 2: Using NPM
+
+1. **Install dependencies:**
 ```bash
 npm install
 
 ```
 
-3. **Environment Configuration:**
 
-* Create a `.env` file in the root directory.
-* Add your Turso credentials:
-
+2. **Configure Environment:**
+Create a `.env` file and add your Turso credentials:
 ```env
 TURSO_AUTH_TOKEN=your_token_here
 TURSO_DATABASE_URL=your_url_here
 
 ```
 
-4. **Launch the application:**
 
+3. **Launch the application:**
 ```bash
 npm start
 
 ```
 
+
 ### 📁 Project Structure
 
 ```text
-├── client/                 # Frontend assets
-│   └── index.html          # Main Chat UI & Socket client logic
+├── client/                 # Frontend assets (HTML, CSS, JS)
 ├── server/                 # Backend source code
-│   └── index.js            # Express server, Socket.io logic & Turso config
+│   └── index.js            # Express server & Socket.io logic
 ├── .env                    # Environment variables (Private)
+├── .env.example            # Template for environment variables
+├── .dockerignore           # Files excluded from Docker build
 ├── .gitignore              # Files excluded from Git
+├── Dockerfile              # Docker image configuration
+├── docker-compose.yml      # Docker container orchestration
 ├── package.json            # Project dependencies and scripts
 └── README.md               # Documentation
 
