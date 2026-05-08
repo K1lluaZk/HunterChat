@@ -5,36 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HunterChat</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
   <style>
     #messages::-webkit-scrollbar { width: 4px; }
     #messages::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
   </style>
 </head>
-<body class="bg-[#0f172a] h-screen flex items-center justify-center p-4">
+<body class="bg-[#0f172a] h-screen flex items-center justify-center p-4 font-sans">
 
-  <section id="chat" class="w-full max-w-md h-[85vh] bg-[#1e293b] rounded-2xl shadow-2xl border border-slate-700 flex flex-col overflow-hidden">
+  <section class="w-full max-w-md h-[85vh] bg-[#1e293b] rounded-2xl shadow-2xl border border-slate-700 flex flex-col overflow-hidden">
     
-    <header class="bg-[#1e293b] p-4 border-b border-slate-700 flex items-center justify-between">
+    <header class="p-4 border-b border-slate-700 flex items-center justify-between bg-[#1e293b]/50 backdrop-blur-sm">
       <div class="flex items-center gap-2">
         <div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></div>
-        <h1 class="text-white font-bold tracking-tight">HunterChat</h1>
+        <h1 class="text-white font-bold tracking-tight text-sm uppercase">HunterChat</h1>
         <span class="ml-auto text-slate-400 text-xs font-mono">v2.1</span>
       </div>
-      <span id="user-tag" class="text-indigo-400 text-[10px] font-mono uppercase bg-indigo-500/10 px-2 py-1 rounded"></span>
+      <span id="user-tag" class="text-indigo-400 text-[10px] font-mono bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/20"></span>
     </header>
 
-    <ul id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col">
-      </ul>
+    <ul id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-2"></ul>
+
+    <!-- UI de Respuesta (Sin emojis) -->
+    <div id="reply-preview" class="hidden px-4 py-2 bg-[#0f172a] border-t border-indigo-500/50 flex justify-between items-center animate-in slide-in-from-bottom-2 duration-200">
+        <div class="text-xs overflow-hidden border-l-2 border-indigo-500 pl-3 py-1">
+            <p class="text-indigo-400 font-bold mb-0.5" id="reply-user"></p>
+            <p class="text-slate-400 truncate italic" id="reply-text"></p>
+        </div>
+        <button onclick="cancelReply()" class="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    </div>
 
     <form id="form" class="p-4 bg-[#1e293b] border-t border-slate-700 flex gap-2">
-      <input 
-        type="text" id="input" placeholder="Escribe un mensaje..." autocomplete="off"
-        class="flex-1 bg-[#0f172a] text-white border border-slate-600 rounded-xl px-4 py-2 focus:outline-none focus:border-indigo-500 transition-all text-sm"
-      />
-      <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-transform active:scale-90">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5">
-          <path d="M3.478 2.405a.75.75 0 00-.926.94l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.405z" />
-        </svg>
+      <input type="text" id="input" placeholder="Escribe un mensaje..." autocomplete="off" class="flex-1 bg-[#0f172a] text-white border border-slate-600 rounded-xl px-4 py-2 focus:outline-none focus:border-indigo-500 text-sm transition-all placeholder:text-slate-600" />
+      <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-90 shadow-lg shadow-indigo-500/20">
+        <i data-lucide="send-horizontal" class="w-5 h-5"></i>
       </button>
     </form>
   </section>
@@ -42,95 +48,120 @@
   <script type="module">
     import { io } from "https://cdn.socket.io/4.8.3/socket.io.esm.min.js";
 
-    document.addEventListener('DOMContentLoaded', () => {
-      const messagesList = document.getElementById('messages');
-      const form = document.getElementById('form');
-      const input = document.getElementById('input');
-      const userTag = document.getElementById('user-tag');
+    const socket = io();
+    const messagesList = document.getElementById('messages');
+    const replyPreview = document.getElementById('reply-preview');
+    let username = localStorage.getItem('username') || prompt('Identifícate:') || 'User';
+    let replyTo = null;
+    let lastDateLabel = null;
 
-      let lastDateLabel = null;
-      let username = localStorage.getItem('username') || prompt('Tu nombre:') || 'Anónimo';
-      localStorage.setItem('username', username);
-      userTag.innerText = username;
+    localStorage.setItem('username', username);
+    document.getElementById('user-tag').innerText = username;
 
-      const socket = io();
+    window.setReply = (id, user, content) => {
+        replyTo = { id, user, content };
+        document.getElementById('reply-user').innerText = user;
+        document.getElementById('reply-text').innerText = content;
+        replyPreview.classList.remove('hidden');
+        document.getElementById('input').focus();
+        lucide.createIcons(); // Refrescar iconos en el preview
+    };
 
-      socket.on('connect', () => socket.emit('get history'));
+    window.cancelReply = () => {
+        replyTo = null;
+        replyPreview.classList.add('hidden');
+    };
 
-      socket.on('load history', (history) => {
-        messagesList.innerHTML = ''; 
+    window.deleteMsg = (id) => {
+        if(confirm('¿Deseas eliminar este mensaje permanentemente?')) {
+            socket.emit('delete message', id, username);
+        }
+    };
+
+    socket.on('connect', () => socket.emit('get history'));
+
+    socket.on('load history', (history) => {
+        messagesList.innerHTML = '';
         lastDateLabel = null;
-        history.forEach(m => renderMessage(m.content, m.user, m.timestamp));
+        history.forEach(m => renderMessage(m));
+        lucide.createIcons(); 
         scrollToBottom();
-      });
+    });
 
-      socket.on('chat message', (msg, id, user, timestamp) => {
-        renderMessage(msg, user, timestamp);
+    socket.on('chat message', (row) => {
+        renderMessage(row);
+        lucide.createIcons(); 
         scrollToBottom();
-      });
+    });
 
-      function renderMessage(content, user, timestamp) {
-        const isMyMessage = user === username;
-        // Al recibir el ISO string con 'Z', new Date() lo convierte a tu hora local automáticamente
-        const msgDate = timestamp ? new Date(timestamp) : new Date();
+    socket.on('message deleted', (id) => {
+        const element = document.getElementById(`msg-${id}`);
+        if (element) {
+            element.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => element.remove(), 200);
+        }
+    });
+
+    function renderMessage(row) {
+        const isMine = row.user === username;
+        const date = new Date(row.timestamp);
         
-        const dateLabel = getDateLabel(msgDate);
+        // Separador de fecha minimalista
+        const dateLabel = date.toLocaleDateString();
         if (dateLabel !== lastDateLabel) {
-          renderDateSeparator(dateLabel);
-          lastDateLabel = dateLabel;
+            messagesList.insertAdjacentHTML('beforeend', `
+                <div class="flex items-center gap-4 my-6 opacity-40">
+                    <div class="h-[1px] flex-1 bg-slate-600"></div>
+                    <span class="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em]">${dateLabel}</span>
+                    <div class="h-[1px] flex-1 bg-slate-600"></div>
+                </div>`);
+            lastDateLabel = dateLabel;
         }
 
-        const time = msgDate.toLocaleTimeString(navigator.language, { 
-          hour: '2-digit', 
-          minute: '2-digit',
-          hour12: true 
-        });
-
         const item = `
-          <li class="flex flex-col mb-4 ${isMyMessage ? 'items-end' : 'items-start'}">
-            <div class="flex items-center gap-2 mb-1 px-1 ${isMyMessage ? 'flex-row-reverse' : ''}">
-              <span class="text-[10px] font-bold text-slate-500">${isMyMessage ? 'Tú' : user}</span>
-              <span class="text-[9px] text-slate-600">${time}</span>
+          <li id="msg-${row.id}" class="flex flex-col group ${isMine ? 'items-end' : 'items-start'} mb-4">
+            <div class="flex items-center gap-2 mb-1 px-1 ${isMine ? 'flex-row-reverse' : ''}">
+                <span class="text-[10px] font-bold text-slate-500">${isMine ? 'Tú' : row.user}</span>
+                <span class="text-[9px] text-slate-600">${date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
             </div>
-            <div class="max-w-[90%] px-3 py-2 rounded-2xl text-sm shadow-md ${
-              isMyMessage ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-700 text-slate-100 rounded-tl-none'
-            }">
-              ${content}
+            
+            <div class="relative max-w-[85%]">
+                <div class="px-3 py-2 rounded-2xl text-sm shadow-sm transition-all ${isMine ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-700 text-slate-100 rounded-tl-none'}">
+                    ${row.reply_content ? `
+                        <div class="mb-2 p-2 bg-black/20 rounded-lg text-[11px] border-l-2 border-white/30 opacity-70 italic truncate">
+                            <span class="font-bold block not-italic mb-0.5">${row.reply_user}</span>
+                            ${row.reply_content}
+                        </div>` : ''}
+                    <p class="leading-relaxed">${row.content}</p>
+                </div>
+
+                <!-- Botones de Acción Estilizados (Aparecen al pasar el mouse) -->
+                <div class="absolute top-1/2 -translate-y-1/2 ${isMine ? '-left-14' : '-right-14'} hidden group-hover:flex items-center gap-1 bg-[#1e293b] border border-slate-700 p-1 rounded-lg shadow-2xl z-10">
+                    <button onclick="setReply(${row.id}, '${row.user}', '${row.content}')" class="p-1.5 hover:bg-slate-700 rounded-md text-slate-400 hover:text-indigo-400 transition-colors" title="Responder">
+                        <i data-lucide="reply" class="w-3.5 h-3.5"></i>
+                    </button>
+                    ${isMine ? `
+                    <button onclick="deleteMsg(${row.id})" class="p-1.5 hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-400 transition-colors" title="Borrar">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>` : ''}
+                </div>
             </div>
           </li>`;
         messagesList.insertAdjacentHTML('beforeend', item);
-      }
+    }
 
-      function renderDateSeparator(label) {
-        const separator = `
-          <div class="flex items-center my-6">
-            <div class="flex-grow border-t border-slate-700/50"></div>
-            <span class="mx-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">${label}</span>
-            <div class="flex-grow border-t border-slate-700/50"></div>
-          </div>`;
-        messagesList.insertAdjacentHTML('beforeend', separator);
-      }
+    const scrollToBottom = () => {
+        messagesList.scrollTo({ top: messagesList.scrollHeight, behavior: 'smooth' });
+    };
 
-      function getDateLabel(date) {
-        const today = new Date();
-        const yesterday = new Date();
-        yesterday.setDate(today.getDate() - 1);
-
-        if (date.toDateString() === today.toDateString()) return 'Hoy';
-        if (date.toDateString() === yesterday.toDateString()) return 'Ayer';
-        
-        return date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
-      }
-
-      const scrollToBottom = () => messagesList.scrollTop = messagesList.scrollHeight;
-
-      form.addEventListener('submit', (e) => {
+    document.getElementById('form').addEventListener('submit', (e) => {
         e.preventDefault();
+        const input = document.getElementById('input');
         if (input.value.trim()) {
-          socket.emit('chat message', input.value, username);
-          input.value = '';
+            socket.emit('chat message', input.value, username, replyTo);
+            input.value = '';
+            cancelReply();
         }
-      });
     });
   </script>
 </body>

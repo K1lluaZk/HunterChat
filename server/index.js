@@ -10,25 +10,22 @@ dotenv.config()
 const port = process.env.PORT ?? 3000
 const app = express()
 const server = createServer(app)
-
-const io = new Server(server, {
-  connectionStateRecovery: {
-    maxDisconnectionDuration: 2 * 60 * 1000,
-  }
-})
+const io = new Server(server, { connectionStateRecovery: {} })
 
 const db = createClient({
   url: process.env.DB_URL,
   authToken: process.env.DB_TOKEN
 })
 
-// Inicialización de la tabla
+// Actualizamos la tabla para incluir referencias a respuestas
 await db.execute(`
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     content TEXT NOT NULL,
     user TEXT DEFAULT 'Anónimo',
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reply_content TEXT,
+    reply_user TEXT
   )
 `)
 
@@ -36,45 +33,45 @@ app.use(logger('dev'))
 app.use(express.static('client'))
 
 io.on('connection', async (socket) => {
-  console.log(' Usuario conectado')
-
+  
   socket.on('get history', async () => {
-    try {
-      // Forzamos el formato ISO con la 'Z' para que el cliente lo entienda como UTC
-      const results = await db.execute(`
-        SELECT id, content, user, strftime('%Y-%m-%dT%H:%M:%SZ', timestamp) as timestamp 
-        FROM messages 
-        ORDER BY id DESC LIMIT 50
-      `)
-      socket.emit('load history', results.rows.reverse())
-    } catch (e) {
-      console.error("Error al cargar historial:", e)
-    }
+    const results = await db.execute("SELECT *, strftime('%Y-%m-%dT%H:%M:%SZ', timestamp) as timestamp FROM messages ORDER BY id DESC LIMIT 50")
+    socket.emit('load history', results.rows.reverse())
   })
 
-  socket.on('chat message', async (msg, username = 'Anónimo') => {
+  // EVENTO ENVIAR (con soporte para respuestas)
+  socket.on('chat message', async (msg, username, replyData = null) => {
     if (!msg?.trim()) return 
-
     try {
       const result = await db.execute({
-        sql: 'INSERT INTO messages (content, user) VALUES (:msg, :user)',
-        args: { msg, user: username }
+        sql: 'INSERT INTO messages (content, user, reply_content, reply_user) VALUES (?, ?, ?, ?)',
+        args: [msg, username, replyData?.content || null, replyData?.user || null]
       })
       
-      const newMessage = await db.execute({
-        sql: "SELECT strftime('%Y-%m-%dT%H:%M:%SZ', timestamp) as timestamp FROM messages WHERE id = ?",
+      const row = await db.execute({
+        sql: "SELECT *, strftime('%Y-%m-%dT%H:%M:%SZ', timestamp) as timestamp FROM messages WHERE id = ?",
         args: [result.lastInsertRowid.toString()]
       })
 
-      io.emit('chat message', msg, result.lastInsertRowid.toString(), username, newMessage.rows[0].timestamp)
-    } catch (e) {
-      console.error("Error al guardar mensaje:", e)
-    }
+      io.emit('chat message', row.rows[0])
+    } catch (e) { console.error(e) }
   })
-})
 
-app.get('/', (req, res) => {
-  res.sendFile(process.cwd() + '/client/index.html')
+  // EVENTO BORRAR
+  socket.on('delete message', async (id, username) => {
+    try {
+      // Seguridad: Solo borra si el usuario coincide
+      const check = await db.execute({
+        sql: 'SELECT user FROM messages WHERE id = ?',
+        args: [id]
+      })
+
+      if (check.rows[0]?.user === username) {
+        await db.execute({ sql: 'DELETE FROM messages WHERE id = ?', args: [id] })
+        io.emit('message deleted', id)
+      }
+    } catch (e) { console.error(e) }
+  })
 })
 
 server.listen(port, () => {
