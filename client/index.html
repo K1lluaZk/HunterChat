@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HunterChat</title>
+  <title>HunterChat - Chat en Tiempo Real</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
@@ -17,16 +17,16 @@
     
     <header class="p-4 border-b border-slate-700 flex items-center justify-between bg-[#1e293b]/50 backdrop-blur-sm">
       <div class="flex items-center gap-2">
-        <div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></div>
+        <div class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
         <h1 class="text-white font-bold tracking-tight text-sm uppercase">HunterChat</h1>
-        <span class="ml-auto text-slate-400 text-xs font-mono">v2.1</span>
+        <span class="text-slate-500 text-[10px] font-mono ml-1">v2.3</span>
       </div>
       <span id="user-tag" class="text-indigo-400 text-[10px] font-mono bg-indigo-500/10 px-2 py-1 rounded border border-indigo-500/20"></span>
     </header>
 
     <ul id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col gap-2"></ul>
 
-    <!-- UI de Respuesta (Sin emojis) -->
+    <!-- UI de Respuesta -->
     <div id="reply-preview" class="hidden px-4 py-2 bg-[#0f172a] border-t border-indigo-500/50 flex justify-between items-center animate-in slide-in-from-bottom-2 duration-200">
         <div class="text-xs overflow-hidden border-l-2 border-indigo-500 pl-3 py-1">
             <p class="text-indigo-400 font-bold mb-0.5" id="reply-user"></p>
@@ -45,12 +45,41 @@
     </form>
   </section>
 
+  <!-- Modal de Info -->
+  <div id="info-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#1e293b] border border-slate-700 w-full max-w-xs rounded-2xl p-6 shadow-2xl scale-95 transition-transform duration-200" id="modal-content">
+        <h3 class="text-white font-bold mb-4 flex items-center gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-indigo-400"></i>
+            Detalles del Mensaje
+        </h3>
+        <div class="space-y-3 text-[11px] font-mono">
+            <div class="bg-[#0f172a] p-2 rounded border border-slate-800">
+                <span class="text-slate-500 block uppercase mb-1">ID del Mensaje:</span>
+                <span id="info-id" class="text-indigo-300"></span>
+            </div>
+            <div class="bg-[#0f172a] p-2 rounded border border-slate-800">
+                <span class="text-slate-500 block uppercase mb-1">Enviado por:</span>
+                <span id="info-user" class="text-emerald-400"></span>
+            </div>
+            <div class="bg-[#0f172a] p-2 rounded border border-slate-800">
+                <span class="text-slate-500 block uppercase mb-1">Fecha y Hora:</span>
+                <span id="info-date" class="text-slate-300"></span>
+            </div>
+        </div>
+        <button onclick="closeInfo()" class="w-full mt-6 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-xl text-xs font-bold transition-colors">
+            Cerrar
+        </button>
+    </div>
+  </div>
+
   <script type="module">
     import { io } from "https://cdn.socket.io/4.8.3/socket.io.esm.min.js";
 
     const socket = io();
     const messagesList = document.getElementById('messages');
     const replyPreview = document.getElementById('reply-preview');
+    const infoModal = document.getElementById('info-modal');
+    
     let username = localStorage.getItem('username') || prompt('Identifícate:') || 'User';
     let replyTo = null;
     let lastDateLabel = null;
@@ -58,18 +87,33 @@
     localStorage.setItem('username', username);
     document.getElementById('user-tag').innerText = username;
 
+    // --- Funciones Globales (Window) ---
     window.setReply = (id, user, content) => {
         replyTo = { id, user, content };
         document.getElementById('reply-user').innerText = user;
         document.getElementById('reply-text').innerText = content;
         replyPreview.classList.remove('hidden');
         document.getElementById('input').focus();
-        lucide.createIcons(); // Refrescar iconos en el preview
+        lucide.createIcons();
     };
 
     window.cancelReply = () => {
         replyTo = null;
         replyPreview.classList.add('hidden');
+    };
+
+    window.showInfo = (id, user, rawDate) => {
+        const date = new Date(rawDate);
+        document.getElementById('info-id').innerText = `#${id}`;
+        document.getElementById('info-user').innerText = user;
+        document.getElementById('info-date').innerText = date.toLocaleString();
+        infoModal.classList.remove('hidden');
+        setTimeout(() => document.getElementById('modal-content').classList.add('scale-100'), 10);
+    };
+
+    window.closeInfo = () => {
+        document.getElementById('modal-content').classList.remove('scale-100');
+        setTimeout(() => infoModal.classList.add('hidden'), 200);
     };
 
     window.deleteMsg = (id) => {
@@ -78,35 +122,21 @@
         }
     };
 
-    socket.on('connect', () => socket.emit('get history'));
+    // --- Lógica de Scroll ---
+    const scrollToBottom = (behavior = 'smooth') => {
+        requestAnimationFrame(() => {
+            messagesList.scrollTo({
+                top: messagesList.scrollHeight,
+                behavior: behavior
+            });
+        });
+    };
 
-    socket.on('load history', (history) => {
-        messagesList.innerHTML = '';
-        lastDateLabel = null;
-        history.forEach(m => renderMessage(m));
-        lucide.createIcons(); 
-        scrollToBottom();
-    });
-
-    socket.on('chat message', (row) => {
-        renderMessage(row);
-        lucide.createIcons(); 
-        scrollToBottom();
-    });
-
-    socket.on('message deleted', (id) => {
-        const element = document.getElementById(`msg-${id}`);
-        if (element) {
-            element.classList.add('opacity-0', 'scale-95');
-            setTimeout(() => element.remove(), 200);
-        }
-    });
-
+    // --- Renderizado de Mensajes ---
     function renderMessage(row) {
         const isMine = row.user === username;
         const date = new Date(row.timestamp);
         
-        // Separador de fecha minimalista
         const dateLabel = date.toLocaleDateString();
         if (dateLabel !== lastDateLabel) {
             messagesList.insertAdjacentHTML('beforeend', `
@@ -119,7 +149,10 @@
         }
 
         const item = `
-          <li id="msg-${row.id}" class="flex flex-col group ${isMine ? 'items-end' : 'items-start'} mb-4">
+          <li id="msg-${row.id}" 
+              oncontextmenu="event.preventDefault(); showInfo(${row.id}, '${row.user}', '${row.timestamp}')"
+              class="flex flex-col group ${isMine ? 'items-end' : 'items-start'} mb-4">
+            
             <div class="flex items-center gap-2 mb-1 px-1 ${isMine ? 'flex-row-reverse' : ''}">
                 <span class="text-[10px] font-bold text-slate-500">${isMine ? 'Tú' : row.user}</span>
                 <span class="text-[9px] text-slate-600">${date.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
@@ -128,20 +161,22 @@
             <div class="relative max-w-[85%]">
                 <div class="px-3 py-2 rounded-2xl text-sm shadow-sm transition-all ${isMine ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-700 text-slate-100 rounded-tl-none'}">
                     ${row.reply_content ? `
-                        <div class="mb-2 p-2 bg-black/20 rounded-lg text-[11px] border-l-2 border-white/30 opacity-70 italic truncate">
+                        <div class="mb-2 p-2 bg-black/20 rounded-lg text-[10px] border-l-2 border-white/30 opacity-70 italic truncate">
                             <span class="font-bold block not-italic mb-0.5">${row.reply_user}</span>
                             ${row.reply_content}
                         </div>` : ''}
                     <p class="leading-relaxed">${row.content}</p>
                 </div>
 
-                <!-- Botones de Acción Estilizados (Aparecen al pasar el mouse) -->
-                <div class="absolute top-1/2 -translate-y-1/2 ${isMine ? '-left-14' : '-right-14'} hidden group-hover:flex items-center gap-1 bg-[#1e293b] border border-slate-700 p-1 rounded-lg shadow-2xl z-10">
-                    <button onclick="setReply(${row.id}, '${row.user}', '${row.content}')" class="p-1.5 hover:bg-slate-700 rounded-md text-slate-400 hover:text-indigo-400 transition-colors" title="Responder">
+                <div class="absolute top-1/2 -translate-y-1/2 ${isMine ? '-left-20' : '-right-20'} hidden group-hover:flex items-center gap-1 bg-[#1e293b] border border-slate-700 p-1 rounded-lg shadow-2xl z-10">
+                    <button onclick="showInfo(${row.id}, '${row.user}', '${row.timestamp}')" class="p-1.5 hover:bg-slate-700 rounded-md text-slate-400 hover:text-emerald-400 transition-colors">
+                        <i data-lucide="info" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <button onclick="setReply(${row.id}, '${row.user}', '${row.content}')" class="p-1.5 hover:bg-slate-700 rounded-md text-slate-400 hover:text-indigo-400 transition-colors">
                         <i data-lucide="reply" class="w-3.5 h-3.5"></i>
                     </button>
                     ${isMine ? `
-                    <button onclick="deleteMsg(${row.id})" class="p-1.5 hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-400 transition-colors" title="Borrar">
+                    <button onclick="deleteMsg(${row.id})" class="p-1.5 hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-400 transition-colors">
                         <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                     </button>` : ''}
                 </div>
@@ -150,10 +185,32 @@
         messagesList.insertAdjacentHTML('beforeend', item);
     }
 
-    const scrollToBottom = () => {
-        messagesList.scrollTo({ top: messagesList.scrollHeight, behavior: 'smooth' });
-    };
+    // --- Sockets ---
+    socket.on('connect', () => socket.emit('get history'));
 
+    socket.on('load history', (history) => {
+        messagesList.innerHTML = '';
+        lastDateLabel = null;
+        history.forEach(m => renderMessage(m));
+        lucide.createIcons(); 
+        scrollToBottom('auto'); 
+    });
+
+    socket.on('chat message', (row) => {
+        renderMessage(row);
+        lucide.createIcons(); 
+        scrollToBottom('smooth');
+    });
+
+    socket.on('message deleted', (id) => {
+        const element = document.getElementById(`msg-${id}`);
+        if (element) {
+            element.classList.add('opacity-0', 'scale-95');
+            setTimeout(() => element.remove(), 200);
+        }
+    });
+
+    // --- Formulario ---
     document.getElementById('form').addEventListener('submit', (e) => {
         e.preventDefault();
         const input = document.getElementById('input');
