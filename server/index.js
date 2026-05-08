@@ -17,7 +17,6 @@ const db = createClient({
   authToken: process.env.DB_TOKEN
 })
 
-// Actualizamos la tabla para incluir referencias a respuestas
 await db.execute(`
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -39,7 +38,6 @@ io.on('connection', async (socket) => {
     socket.emit('load history', results.rows.reverse())
   })
 
-  // EVENTO ENVIAR (con soporte para respuestas)
   socket.on('chat message', async (msg, username, replyData = null) => {
     if (!msg?.trim()) return 
     try {
@@ -57,10 +55,8 @@ io.on('connection', async (socket) => {
     } catch (e) { console.error(e) }
   })
 
-  // EVENTO BORRAR
   socket.on('delete message', async (id, username) => {
     try {
-      // Seguridad: Solo borra si el usuario coincide
       const check = await db.execute({
         sql: 'SELECT user FROM messages WHERE id = ?',
         args: [id]
