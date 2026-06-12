@@ -95,4 +95,6 @@ This project is open-source and available under the **MIT License**.
 
 <img width="643" height="638" alt="WhatsApp Image 2026-05-08 at 6 45 53 PM" src="https://github.com/user-attachments/assets/433594b1-4378-42cd-8d14-95de8d5caedc" />
 
+### Video Explicativo
 
+https://youtu.be/oSEPUIVxAGk
